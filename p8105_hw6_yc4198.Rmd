@@ -11,18 +11,68 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r,warning=FALSE,message=FALSE}
 library(tidyverse)
+library(purrr)
 ```
 
 ## Question 2
 
+### Data cleaning
 ```{r,warning=FALSE,message=FALSE}
 homicide <- read_csv("https://raw.githubusercontent.com/washingtonpost/data-homicides/master/homicide-data.csv")
 
 homicide <- homicide%>%
   mutate(city_state=str_c(city, ",",state),
-         solved = ifelse(disposition=="Closed without arrest"| disposition =="Open/No arrest",0,1),
+         resolved = as.numeric(disposition == "Closed by arrest"),
          victim_age = as.numeric(victim_age))%>%
   filter(victim_race== "White"|victim_race== "Black")%>%
-  filter(city_state != "Dallas,TX"&city_state != "Phoenix,AZ"&city_state != "Kansas City,MO")
+  filter(city_state != "Dallas,TX"&city_state != "Phoenix,AZ"&city_state != "Kansas City,MO"& city_state != "Tulsa,AL")
+```
+
+### Fit the model for Baltimore
+```{r}
+baltimore <- homicide%>%filter(city_state == "Baltimore,MD")%>%
+  mutate(
+    resolved = as.numeric(disposition == "Closed by arrest"),
+    victim_race = fct_relevel(victim_race, "White")) %>% 
+  select(resolved, victim_age, victim_race, victim_sex)
+
+glm1 <- glm(resolved ~ victim_age+victim_sex+victim_race, data = baltimore,family = binomial())
+
+glm1 %>% broom::tidy() %>%
+  mutate(OR = exp(estimate),
+         lower_CI = OR - qnorm(0.95)*std.error,
+         upper_CI = OR + qnorm(0.95)*std.error,
+         term = str_replace(term, "victim_sex", "Victim Sex: "))%>%
+  filter(term == "victim_sexMale")%>%
+    select(term, OR, lower_CI,upper_CI)%>%
+  knitr::kable(digits = 3)
+```
+
+### Run glm for each city
+```{r}
+each_city = 
+  homicide %>%
+  select(city_state,resolved, victim_age, victim_race, victim_sex)%>%
+  nest(data = -city_state)%>%
+  mutate(
+    fit  = map(.x = data,  ~glm(resolved ~ victim_race + victim_sex + victim_age, data = .x, family = "binomial")),
+    result = map(fit, broom::tidy)) %>%
+    unnest(result) %>% 
+  filter(term == "victim_sexMale")%>%
+    mutate(OR = exp(estimate),
+         lower_CI = OR - qnorm(0.95)*std.error,
+         upper_CI = OR + qnorm(0.95)*std.error)%>%
+    select(city_state, OR, lower_CI,upper_CI)
+```
+
+```{r}
+each_city%>% 
+  ggplot(aes(x = reorder(city_state, -OR), y = OR)) +
+  geom_point(color="red",size=1) +
+  geom_errorbar(aes(ymin = lower_CI, ymax = upper_CI)) +  
+  theme(axis.text.x = element_text(size = 8, angle = 90, vjust = 0.5, hjust = 1))+
+  xlab("City")+
+  ylab("Odds Ratio")+
+  ggtitle("Estimated ORs and CIs for each city.")
 ```
 

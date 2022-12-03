@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r,warning=FALSE,message=FALSE}
 library(tidyverse)
 library(purrr)
+library(modelr)
 ```
 
 ## Question 2
@@ -21,6 +22,7 @@ library(purrr)
 homicide <- read_csv("https://raw.githubusercontent.com/washingtonpost/data-homicides/master/homicide-data.csv")
 
 homicide <- homicide%>%
+  janitor::clean_names()%>%
   mutate(city_state=str_c(city, ",",state),
          resolved = as.numeric(disposition == "Closed by arrest"),
          victim_age = as.numeric(victim_age))%>%
@@ -62,23 +64,81 @@ each_city =
     mutate(OR = exp(estimate),
          lower_CI = OR - qnorm(0.95)*std.error,
          upper_CI = OR + qnorm(0.95)*std.error)%>%
-    select(city_state, OR, lower_CI,upper_CI)
+    select(city_state, OR, lower_CI,upper_CI)%>%
+  knitr::kable(digits = 3)
 ```
 
 ```{r}
 each_city%>% 
-  ggplot(aes(x = reorder(city_state, -OR), y = OR)) +
+  ggplot(aes(x=OR,y = reorder(city_state, -OR))) +
   geom_point(color="red",size=1) +
-  geom_errorbar(aes(ymin = lower_CI, ymax = upper_CI)) +  
-  theme(axis.text.x = element_text(size = 8, angle = 90, vjust = 0.5, hjust = 1))+
-  xlab("City")+
-  ylab("Odds Ratio")+
+  geom_errorbar(aes(xmin = lower_CI, xmax = upper_CI)) +  
+  theme(axis.text.x = element_text(size = 8,vjust = 0.5, hjust = 1),axis.text.y = element_text(size=5.5))+
+  ylab("City")+
+  xlab("Odds Ratio")+
   ggtitle("Estimated ORs and CIs for each city.")
 ```
 
 ## Question 3
 
+### Load and clean the data for regression analysis 
 ```{r,warning=FALSE,message=FALSE}
-birthweight = read_csv("data/birthweight.csv")
+birthweight = read_csv("data/birthweight.csv") %>%
+  janitor::clean_names()%>%
+  drop_na()%>%
+ mutate(
+    babysex = factor(babysex),
+    frace = factor(frace),
+    malform = factor(malform),
+    mrace = factor(mrace)
+  ) 
+  
+```
+
+### Propose a regression model for birthweight. 
+
+I started with a full model with all 19 variables as explanatory variables and birthweight as the response variable. Then I used a stepwise model selection,which is a combination of forward and backward selections. This is to build regression model from a set of candidate predictor variables by entering and removing predictors based on p values, until there is no variable left to enter or remove any more.
+ 
+The final model includes the following variables:
+babysex: baby’s sex (male = 1, female = 2)
+bhead: baby’s head circumference at birth (centimeters)
+blength: baby’s length at birth (centimeteres)
+delwt: mother’s weight at delivery (pounds)
+fincome: family monthly income (in hundreds, rounded)
+gaweeks: gestational age in weeks
+mheight: mother’s height (inches)
+mrace: mother’s race (1 = White, 2 = Black, 3 = Asian, 4 = Puerto Rican, 8 = Other)
+parity: number of live births prior to this pregnancy
+ppwt: mother’s pre-pregnancy weight (pounds)
+smoken: average number of cigarettes smoked per day during pregnancy
+
+
+```{r}
+mymod <-lm(bwt ~., data = birthweight)
+step.model <- step(mymod,direction = "both") 
+step.model%>%broom::tidy()
+```
+### Diagnostics
+```{r}
+birthweight %>% 
+  add_predictions(step.model) %>% 
+  add_residuals(step.model) %>% 
+  ggplot(aes(x = pred, y = resid)) +
+  geom_point(alpha = 0.5,color="red") +
+  labs(
+    x = "Fitted Values",
+    y = "Residuals",
+    title = "Residuals vs. Fitted Values"
+  )+theme_minimal()
+```
+
+### Compare models
+```{r}
+mod1 <- lm(bwt ~ blength+gaweeks, data = birthweight)
+mod2 <- lm(bwt ~ bhead+blength+babysex+bhead*blength+blength*babysex+bhead*babysex+bhead*babysex*blength, data = birthweight)
+```
+
+```{r}
+
 ```
 

@@ -64,18 +64,19 @@ each_city =
     mutate(OR = exp(estimate),
          lower_CI = OR - qnorm(0.95)*std.error,
          upper_CI = OR + qnorm(0.95)*std.error)%>%
-    select(city_state, OR, lower_CI,upper_CI)%>%
-  knitr::kable(digits = 3)
+    select(city_state, OR, lower_CI,upper_CI)
+
+each_city%>%knitr::kable(digits = 3)
 ```
 
 ```{r}
-each_city%>% 
-  ggplot(aes(x=OR,y = reorder(city_state, -OR))) +
+each_city %>% 
+  ggplot(aes(x = reorder(city_state, -OR),y=OR)) +
   geom_point(color="red",size=1) +
-  geom_errorbar(aes(xmin = lower_CI, xmax = upper_CI)) +  
-  theme(axis.text.x = element_text(size = 8,vjust = 0.5, hjust = 1),axis.text.y = element_text(size=5.5))+
-  ylab("City")+
-  xlab("Odds Ratio")+
+  geom_errorbar(aes(ymin = lower_CI, ymax = upper_CI)) +  
+  theme(axis.text.x = element_text(size = 8,angle=90,vjust = 0.5, hjust = 1))+
+  xlab("City")+
+  ylab("Odds Ratio")+
   ggtitle("Estimated ORs and CIs for each city.")
 ```
 - New York has the lowest odds ratio for solving homicides comparing male victims to female victims keeping all other variables fixed which is around 0.25. This means that homicides in which the victim is male are 75% less likely to be resolved that those in which the victim is female in New York.
@@ -176,5 +177,6 @@ cv_df %>%
   theme_minimal()+
   labs(title="Prediction error distribution for each candidate model.")
 ```
+
 Based on these results, It is clear that the model we selected using stepwise selection has the lowest RMSE which also indicates a higher prediction accuracy. The model with interaction terms has a slightly higher RMSE and the middle model gas a very high RMSE. It is reasonable since it only uses length at birth and gestational age as predictors.
 

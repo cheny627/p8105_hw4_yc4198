@@ -78,6 +78,11 @@ each_city%>%
   xlab("Odds Ratio")+
   ggtitle("Estimated ORs and CIs for each city.")
 ```
+- New York has the lowest odds ratio for solving homicides comparing male victims to female victims keeping all other variables fixed which is around 0.25. This means that homicides in which the victim is male are 75% less likely to be resolved that those in which the victim is female in New York.
+
+- Albuquerque has the highest odds ratio for solving homicides comparing male victims to female victims which is around 1.75. This means that homicides in which the victim is male are 75% more likely to be resolved that those in which the victim is female in Albuquerque.
+
+- Most cities have odds ratios less than 1, indicating that homicides in which the victim is male are significantly less like to be resolved than those in which the victim is female in most cities.
 
 ## Question 3
 
@@ -112,12 +117,12 @@ parity: number of live births prior to this pregnancy
 ppwt: mother’s pre-pregnancy weight (pounds)
 smoken: average number of cigarettes smoked per day during pregnancy
 
-
 ```{r}
 mymod <-lm(bwt ~., data = birthweight)
 step.model <- step(mymod,direction = "both") 
 step.model%>%broom::tidy()
 ```
+
 ### Diagnostics
 ```{r}
 birthweight %>% 
@@ -138,7 +143,38 @@ mod1 <- lm(bwt ~ blength+gaweeks, data = birthweight)
 mod2 <- lm(bwt ~ bhead+blength+babysex+bhead*blength+blength*babysex+bhead*babysex+bhead*babysex*blength, data = birthweight)
 ```
 
-```{r}
+```{r,warning=FALSE}
+cv_df =
+  crossv_mc(birthweight, 100) %>% 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble))
 
+cv_df = 
+  cv_df %>% 
+  mutate(
+    step.model  = map(train, ~lm(bwt ~ babysex + bhead + blength + delwt + fincome + gaweeks + mheight + mrace + parity + ppwt + smoken, data = .x)),
+    mod1     = map(train, ~lm(bwt ~ blength+gaweeks,, data = .x)),
+    mod2  = map(train, ~lm(bwt ~ bhead+blength+babysex+bhead*blength+blength*babysex+bhead*babysex+bhead*babysex*blength, data = as_tibble(.x)))) %>% 
+  mutate(
+    rmse_step = map2_dbl(step.model, test, ~rmse(model = .x, data = .y)),
+    rmse_mod1    = map2_dbl(mod1, test, ~rmse(model = .x, data = .y)),
+    rmse_mod2 = map2_dbl(mod2, test, ~rmse(model = .x, data = .y)))
 ```
+
+
+```{r}
+cv_df %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") %>% 
+  mutate(model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse,color=model)) + geom_violin()+
+  theme_minimal()+
+  labs(title="Prediction error distribution for each candidate model.")
+```
+Based on these results, It is clear that the model we selected using stepwise selection has the lowest RMSE which also indicates a higher prediction accuracy. The model with interaction terms has a slightly higher RMSE and the middle model gas a very high RMSE. It is reasonable since it only uses length at birth and gestational age as predictors.
 
